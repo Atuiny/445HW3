@@ -1,0 +1,15 @@
+train:
+  dataset: breast_cancer
+  model_type: logistic_regression
+  test_size: 0.2
+  random_state: 42
+
+  # Logistic Regression
+  lr_c: 1.0
+  lr_max_iter: 500
+  lr_solver: liblinear
+
+  # Random Forest
+  rf_n_estimators: 300
+  rf_max_depth: null
+  rf_min_samples_split: 2

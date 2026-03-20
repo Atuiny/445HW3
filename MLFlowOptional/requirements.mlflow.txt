@@ -1,0 +1,4 @@
+# Optional: MLflow for local experiment visualization/tracking only.
+# Keep this separate so Docker/CI can stay MLflow-free.
+
+mlflow

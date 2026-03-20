@@ -1,0 +1,149 @@
+Assignment3-445 Commands Cheat Sheet
+===================================
+
+All commands assume you are in the repo root:
+  C:\Users\Austin\Assignment3-445
+
+
+1) Environment setup (Windows PowerShell)
+----------------------------------------
+# Create venv (only once)
+python -m venv .venv
+
+# Activate venv
+& .\.venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Optional (local only): install MLflow for experiment visualization
+# This is NOT needed for the Docker container or the dummy registry flow.
+pip install -r MLFlowOptional/requirements.mlflow.txt
+
+# (Optional) confirm python path
+python -c "import sys; print(sys.executable)"
+
+
+2) Basic training (sklearn built-in breast cancer dataset)
+---------------------------------------------------------
+# Main entrypoint used by CI and for local training
+python src/train.py
+
+# Outputs written to:
+#   outputs/model.pkl
+#   outputs/metrics.json
+#   registry/champion.json
+#   model.pkl   (repo root; used by the instructor-style Dockerfile)
+
+
+3) DVC pipeline
+---------------
+# Reproduce the training stage defined in dvc.yaml
+dvc repro
+
+# Show the pipeline graph
+dvc dag
+
+
+4) MLflow: run multiple experiments + pick best by recall
+----------------------------------------------------------
+# Optional/local-only: MLflow visualization & registry (if you still want it).
+# CI/CD + Docker do NOT require MLflow.
+
+# Best practice: use ONE stable experiment name and log multiple runs into it.
+# Re-running this command with different hyperparameters creates more runs.
+# Also registers best-by-recall as a model with alias "champion".
+python MLFlowOptional/run_mlflow_experiments.py --register --experiment-name breast-cancer-model-comparison
+
+# Change hyperparameters (adds new runs to the same experiment)
+python MLFlowOptional/run_mlflow_experiments.py --register --experiment-name breast-cancer-model-comparison --lr-c 0.1 --rf-n-estimators 500 --rf-max-depth 6
+
+# Log only one model type (still a run in the same experiment)
+python MLFlowOptional/run_mlflow_experiments.py --register --experiment-name breast-cancer-model-comparison --run-lr --lr-c 10
+python MLFlowOptional/run_mlflow_experiments.py --register --experiment-name breast-cancer-model-comparison --run-rf --rf-n-estimators 800
+
+# Optional compatibility mode (two separate experiments, one run in each)
+python MLFlowOptional/run_mlflow_experiments.py --register --experiment-names my-bc-exp-lr my-bc-exp-rf
+
+# Change ranking metric
+python MLFlowOptional/run_mlflow_experiments.py --register --ranking-metric recall
+
+
+5) MLflow Model Registry: register champion (standalone)
+--------------------------------------------------------
+# If you already have runs logged, this script searches experiments,
+# selects the best run by metric, registers it, and sets alias "champion".
+python MLFlowOptional/register_champion_model.py
+
+# Specify experiments to search (comma-separated)
+python MLFlowOptional/register_champion_model.py --experiment-names breast-cancer-model-comparison-lr,breast-cancer-model-comparison-rf
+
+# Pick best by a different metric
+python MLFlowOptional/register_champion_model.py --ranking-metric recall
+
+
+6) Load the champion model by alias and demo predictions
+--------------------------------------------------------
+python MLFlowOptional/load_champion_demo.py --batch-size 5
+
+# Use a different registered model name or alias
+python MLFlowOptional/load_champion_demo.py --model-name breast-cancer-champion-model --alias champion --batch-size 10
+
+
+7) MLflow UI (local)
+--------------------
+# Opens the MLflow tracking UI backed by the local sqlite DB at mlflow.db
+mlflow ui --backend-store-uri sqlite:///MLFlowOptional/mlflow.db --port 5000
+
+# Then visit:
+#   http://127.0.0.1:5000
+
+
+7b) Instructor-style example (train.py)
+--------------------------------------
+# This repo's instructor-style training entrypoint is:
+python src/train.py
+
+# If the 'mlflow' command isn't found in PATH, use:
+python -m mlflow ui --backend-store-uri sqlite:///MLFlowOptional/mlflow.db --port 5000
+
+# Champion URI:
+#   models:/BreastCancerClassifier@champion
+
+
+8) (Optional) Model registry lifecycle management demo
+------------------------------------------------------
+# List versions (uses DEFAULT_TRACKING_URI inside the script)
+python MLFlowOptional/manage_models.py --model breast-cancer-champion-model --list
+
+# Transition a specific version to a stage
+python MLFlowOptional/manage_models.py --model breast-cancer-champion-model --version 1 --stage Staging --description "QA testing"
+
+
+9) Export champion -> model.pkl, run FastAPI in Docker, call via HTTP
+-------------------------------------------------------------------
+# Export the current champion alias to a standalone pickle (no MLflow needed in-container)
+python MLFlowOptional/export_champion_model.py --write-sample-request
+
+# Build the inference image (requires Docker Desktop running)
+docker build -t bc-inference:latest .
+
+# Run the container (host port 8000 -> container port 8000)
+docker run --rm -p 8000:8000 bc-inference:latest
+
+# Health check (from host)
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/health
+
+# Predict using the sample payload generated by MLFlowOptional/export_champion_model.py
+$body = Get-Content .\sample_request.json -Raw
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/predict -ContentType "application/json" -Body $body
+
+
+10) Docker layering + versioned rebuild demo (what your instructor described)
+---------------------------------------------------------------------------
+# First build (tag 0.1)
+docker build -t mlops-good:0.1 .
+
+# Change ONLY source code (example: add a print in app.py), then rebuild.
+# Because requirements.txt didn't change, the pip install layer should be cached.
+docker build -t mlops-good:0.2 .

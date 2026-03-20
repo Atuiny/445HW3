@@ -1,0 +1,12 @@
+stages:
+  train:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - src/train_lib.py
+    outs:
+      - outputs/model.pkl
+      - model.pkl
+      - registry/champion.json
+    metrics:
+      - outputs/metrics.json

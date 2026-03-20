@@ -1,0 +1,83 @@
+name: ML Pipeline with GitHub Actions
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  train-evaluate-register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run training pipeline
+        run: |
+          python src/train.py
+
+      - name: Build Docker image
+        run: |
+          docker build -t assignment3-445-infer .
+
+      - name: Run Docker container
+        run: |
+          docker run -d --name assignment3-445-infer -p 8000:8000 assignment3-445-infer
+
+      - name: Smoke test /health
+        run: |
+          for i in {1..15}; do
+            if curl -fsS http://localhost:8000/health > /dev/null; then
+              echo "health ok"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8000/health
+
+      - name: Smoke test /predict
+        run: |
+          curl -fsS -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d @sample_request.json
+
+      - name: Stop Docker container
+        if: always()
+        run: |
+          docker rm -f assignment3-445-infer || true
+
+      - name: Show generated files
+        run: |
+          ls -R
+          echo "----- metrics.json -----"
+          cat outputs/metrics.json
+          echo "----- champion.json -----"
+          cat registry/champion.json
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: outputs/model.pkl
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-metrics
+          path: outputs/metrics.json
+
+      - name: Upload registry artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-registry
+          path: registry/champion.json

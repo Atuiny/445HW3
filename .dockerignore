@@ -1,0 +1,28 @@
+.git
+.dvc
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# MLflow artifacts / tracking
+mlruns
+mlruns/
+mlflow.db
+
+# Optional MLflow tooling
+MLFlowOptional
+MLFlowOptional/
+
+# Data outputs
+data
+data/
+
+# DVC cache
+.dvc/cache
+.dvc/cache/
+
+# VS Code
+.vscode
