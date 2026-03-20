@@ -87,6 +87,7 @@ registry/
 model.pkl
 model_registry/
 data/processed/
+deployment/
 
 # MLflow (optional/local-only)
 MLFlowOptional/mlruns/

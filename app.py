@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import List, Optional
 
 import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 MODEL_PATH = os.getenv("MODEL_PATH", "model.pkl")
@@ -34,6 +37,103 @@ class PredictResponse(BaseModel):
 app = FastAPI(title="Breast Cancer Classifier", version="1.0")
 
 _model = None
+
+
+def _read_sample_request_text() -> str:
+        try:
+                p = Path("sample_request.json")
+                if p.exists():
+                        return p.read_text(encoding="utf-8")
+        except Exception:
+                pass
+        return (
+                '{\n'
+                '  "features": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]\n'
+                '}\n'
+        )
+
+
+_SAMPLE_REQUEST_TEXT = _read_sample_request_text()
+
+
+@app.get("/", response_class=HTMLResponse)
+def simple_ui() -> str:
+        sample_js = json.dumps(_SAMPLE_REQUEST_TEXT)
+        return f"""<!doctype html>
+<html lang=\"en\">
+    <head>
+        <meta charset=\"utf-8\" />
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+        <title>Breast Cancer API</title>
+    </head>
+    <body>
+        <h2>Breast Cancer API</h2>
+        <p>Use this page to call <code>/health</code> and <code>/predict</code>.</p>
+
+        <div>
+            <button id=\"btnHealth\">GET /health</button>
+            <button id=\"btnPredict\">POST /predict</button>
+            <button id=\"btnClear\">Clear output</button>
+        </div>
+
+        <h3>Request body (JSON)</h3>
+        <textarea id=\"body\" rows=\"10\" cols=\"100\" spellcheck=\"false\"></textarea>
+
+        <h3>Terminal output</h3>
+        <pre id=\"log\" style=\"white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; border: 1px solid #ccc; padding: 8px;\"></pre>
+
+        <script>
+            const SAMPLE_BODY = {sample_js};
+            const logEl = document.getElementById('log');
+            const bodyEl = document.getElementById('body');
+            bodyEl.value = SAMPLE_BODY;
+
+            function log(line) {{
+                logEl.textContent += line + "\n";
+            }}
+
+            async function callJson(method, path, bodyText) {{
+                const url = path;
+                log(`> ${{method}} ${{url}}`);
+
+                const opts = {{ method }};
+                if (bodyText !== undefined) {{
+                    opts.headers = {{ 'Content-Type': 'application/json' }};
+                    opts.body = bodyText;
+                }}
+
+                const resp = await fetch(url, opts);
+                const text = await resp.text();
+                log(`< ${{resp.status}} ${{resp.statusText}}`);
+                log(text);
+                log('');
+            }}
+
+            document.getElementById('btnHealth').addEventListener('click', async () => {{
+                try {{
+                    await callJson('GET', '/health');
+                }} catch (e) {{
+                    log(String(e));
+                }}
+            }});
+
+            document.getElementById('btnPredict').addEventListener('click', async () => {{
+                try {{
+                    // Basic JSON validation so errors are clearer
+                    JSON.parse(bodyEl.value);
+                    await callJson('POST', '/predict', bodyEl.value);
+                }} catch (e) {{
+                    log(String(e));
+                }}
+            }});
+
+            document.getElementById('btnClear').addEventListener('click', () => {{
+                logEl.textContent = '';
+            }});
+        </script>
+    </body>
+</html>
+"""
 
 
 @app.on_event("startup")

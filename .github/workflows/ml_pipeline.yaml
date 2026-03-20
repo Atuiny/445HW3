@@ -30,11 +30,11 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t assignment3-445-infer .
+          docker build -t champion-inference-api:latest .
 
       - name: Run Docker container
         run: |
-          docker run -d --name assignment3-445-infer -p 8000:8000 assignment3-445-infer
+          docker run -d --name champion-inference-api -p 8000:8000 champion-inference-api:latest
 
       - name: Smoke test /health
         run: |
@@ -54,7 +54,11 @@ jobs:
       - name: Stop Docker container
         if: always()
         run: |
-          docker rm -f assignment3-445-infer || true
+          docker rm -f champion-inference-api || true
+
+      - name: Export Docker image tar
+        run: |
+          docker save champion-inference-api:latest -o champion-inference-api.tar
 
       - name: Show generated files
         run: |
@@ -81,3 +85,9 @@ jobs:
         with:
           name: model-registry
           path: registry/champion.json
+
+      - name: Upload Docker image tar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: champion-inference-api-tar
+          path: champion-inference-api.tar
