@@ -1,5 +1,11 @@
 param(
   [string]$TarPath = "./champion-inference-api.tar",
+  [switch]$DownloadFromGitHub,
+  [string]$Repo = "Atuiny/445HW3",
+  [string]$WorkflowFile = "ml_pipeline.yaml",
+  [string]$Branch = "master",
+  [string]$ArtifactName = "champion-inference-api-tar",
+  [string]$RunId = "",
   [int]$HostPort = 8000,
   [string]$ContainerName = "champion-inference-api"
 )
@@ -10,6 +16,43 @@ function Require-Command([string]$Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
     throw "Required command not found: '$Name'. Install it and try again."
   }
+}
+
+if ($DownloadFromGitHub) {
+  Require-Command gh
+
+  Write-Host "Checking GitHub CLI auth..." -ForegroundColor Cyan
+  try {
+    gh auth status | Out-Null
+  } catch {
+    throw "Not logged into GitHub CLI. Run: gh auth login"
+  }
+
+  if (-not $RunId) {
+    Write-Host "Finding latest successful workflow run on $Repo ($WorkflowFile @ $Branch)..." -ForegroundColor Cyan
+    $RunId = gh run list --repo $Repo --workflow $WorkflowFile --branch $Branch --status success --limit 1 --json databaseId --jq '.[0].databaseId'
+  }
+
+  if (-not $RunId) {
+    throw "No successful runs found yet for $WorkflowFile on branch $Branch. Run the workflow once in GitHub Actions first."
+  }
+
+  $artifactDir = Join-Path $PWD "ci_artifacts"
+  if (Test-Path $artifactDir) {
+    Remove-Item -Recurse -Force $artifactDir
+  }
+  New-Item -ItemType Directory -Path $artifactDir | Out-Null
+
+  Write-Host "Downloading artifact '$ArtifactName' from run $RunId..." -ForegroundColor Cyan
+  $null = gh run download $RunId --repo $Repo --name $ArtifactName -D $artifactDir
+
+  $tar = Get-ChildItem -Path $artifactDir -Filter "*.tar" -Recurse | Select-Object -First 1
+  if (-not $tar) {
+    throw "Download succeeded but no .tar file was found under: $artifactDir"
+  }
+
+  $TarPath = $tar.FullName
+  Write-Host "Downloaded tar: $TarPath" -ForegroundColor Green
 }
 
 Require-Command docker

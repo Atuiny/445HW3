@@ -36,6 +36,10 @@ docker load -i champion-inference-api.tar
 docker images
 docker run --rm -p 8000:8000 champion-inference-api:latest
 
+# Optional convenience (downloads the latest successful Actions artifact tar using GitHub CLI):
+# Requires: gh auth login
+\.\scripts\StartUp.ps1 -DownloadFromGitHub
+
 # Open Swagger UI:
 #   http://127.0.0.1:8000/docs
 
